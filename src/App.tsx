@@ -6,7 +6,7 @@ import Dashboard from './components/Dashboard';
 import ExpenseManager from './components/ExpenseManager';
 import AccountManager from './components/AccountManager';
 import InvestmentManager from './components/InvestmentManager';
-import AIInsights from './components/AIInsights';
+//import AIInsights from './components/AIInsights';
 
 const App: React.FC = () => {
   const [view, setView] = useState<View>('dashboard');
@@ -75,8 +75,8 @@ const App: React.FC = () => {
         return <AccountManager data={data} updateData={updateData} month={currentMonth} year={currentYear} />;
       case 'investments':
         return <InvestmentManager data={data} updateData={updateData} month={currentMonth} year={currentYear} />;
-      case 'ai':
-        return <AIInsights data={data} />;
+      /*case 'ai':
+        return <AIInsights data={data} />;*/
       default:
         return <Dashboard data={data} month={currentMonth} year={currentYear} />;
     }
