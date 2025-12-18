@@ -13,7 +13,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView }) => {
     { id: 'expenses', label: 'Gastos', icon: '💸' },
     { id: 'wealth', label: 'Patrimonio', icon: '🏦' },
     { id: 'investments', label: 'Inversiones', icon: '📈' },
-    { id: 'ai', label: 'Asesor IA', icon: '🤖' },
+    //{ id: 'ai', label: 'Asesor IA', icon: '🤖' },
   ];
 
   return (
