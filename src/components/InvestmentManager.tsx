@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppData, ETFInvestment } from '../types';
 import { ETF_NAMES } from '../constants';
 
@@ -11,32 +11,43 @@ interface Props {
 }
 
 const InvestmentManager: React.FC<Props> = ({ data, updateData, month, year }) => {
-  const [newInv, setNewInv] = useState({
-    etfName: ETF_NAMES[0],
-    amountUsd: '',
-    exchangeRate: '4000',
-    date: new Date().toISOString().split('T')[0]
-  });
+  // Create missing default ETF records for the selected month/year
+  useEffect(() => {
+    const existing = new Set(
+      data.investments.filter(i => i.month === month && i.year === year).map(i => i.etfName)
+    );
 
-  const handleAdd = () => {
-    if (!newInv.amountUsd || !newInv.etfName) return;
-    
-    const usd = parseFloat(newInv.amountUsd);
-    const rate = parseFloat(newInv.exchangeRate);
+    const missing = ETF_NAMES.filter(n => !existing.has(n));
+    if (missing.length === 0) return;
 
-    const investment: ETFInvestment = {
+    const defaults: ETFInvestment[] = missing.map(name => ({
       id: crypto.randomUUID(),
-      etfName: newInv.etfName.toUpperCase(),
-      amountUsd: usd,
-      amountCop: usd * rate,
-      exchangeRate: rate,
+      etfName: name,
+      amountUsd: 0,
+      exchangeRate: 4000,
+      amountCop: 0,
       month,
       year,
-      date: newInv.date
-    };
+      date: new Date().toISOString().split('T')[0]
+    }));
 
-    updateData({ investments: [...data.investments, investment] });
-    setNewInv({ ...newInv, amountUsd: '' });
+    updateData({ investments: [...data.investments, ...defaults] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, year]);
+
+  const handleUpdate = (id: string, changes: Partial<ETFInvestment>) => {
+    const updated = data.investments.map(i => {
+      if (i.id !== id) return i;
+      const merged = { ...i, ...changes } as ETFInvestment;
+      // recalculate COP if usd or rate changed
+      if (typeof changes.amountUsd !== 'undefined' || typeof changes.exchangeRate !== 'undefined') {
+        const usd = Number(merged.amountUsd) || 0;
+        const rate = Number(merged.exchangeRate) || 0;
+        merged.amountCop = usd * rate;
+      }
+      return merged;
+    });
+    updateData({ investments: updated });
   };
 
   const exportToCSV = () => {
@@ -71,74 +82,36 @@ const InvestmentManager: React.FC<Props> = ({ data, updateData, month, year }) =
   return (
     <div className="space-y-6">
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-slate-800">Registrar Aporte ETF</h3>
-          <button 
-            onClick={exportToCSV}
-            className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-indigo-600 transition-colors"
-          >
-            📥 Exportar Inversiones
-          </button>
-        </div>
-        <p className="text-sm text-slate-500 mb-6">Ingresa los datos del aporte. Los campos ahora tienen máxima visibilidad.</p>
-        
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="relative">
-            <input 
-              list="etf-options"
-              className={inputClasses}
-              placeholder="Símbolo ETF (ej: VOO)"
-              value={newInv.etfName}
-              onChange={(e) => setNewInv({...newInv, etfName: e.target.value})}
-            />
-            <datalist id="etf-options">
-              {ETF_NAMES.map(n => <option key={n} value={n} />)}
-            </datalist>
-          </div>
-          
-          <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg p-1 px-3 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
-            <span className="text-slate-500 text-xs font-black uppercase">$USD</span>
-            <input 
-              type="number" 
-              className="w-full text-sm text-slate-900 bg-white border-none outline-none focus:ring-0 p-1.5"
-              placeholder="0.00"
-              value={newInv.amountUsd}
-              onChange={(e) => setNewInv({...newInv, amountUsd: e.target.value})}
-            />
-          </div>
-
-          <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg p-1 px-3 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
-            <span className="text-slate-500 text-xs font-black uppercase">TRM</span>
-            <input 
-              type="number" 
-              className="w-full text-sm text-slate-900 bg-white border-none outline-none focus:ring-0 p-1.5"
-              placeholder="4000"
-              value={newInv.exchangeRate}
-              onChange={(e) => setNewInv({...newInv, exchangeRate: e.target.value})}
-            />
-          </div>
-
-          <input 
-            type="date"
-            className={inputClasses}
-            value={newInv.date}
-            onChange={(e) => setNewInv({...newInv, date: e.target.value})}
-          />
-          
-          <button 
-            onClick={handleAdd}
-            className="bg-emerald-600 text-white p-2.5 rounded-lg text-sm font-semibold hover:bg-emerald-700 shadow-md active:scale-95 transition-all"
-          >
-            Registrar Aporte
-          </button>
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-lg font-bold text-slate-800">Aportes del Periodo</h3>
-          <div className="bg-emerald-50 text-emerald-700 px-4 py-1.5 rounded-full text-sm font-bold shadow-sm">
-            Total Invertido: ${totalInvestedMonth.toLocaleString()} COP
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                const record: ETFInvestment = {
+                  id: crypto.randomUUID(),
+                  etfName: '',
+                  amountUsd: 0,
+                  exchangeRate: 4000,
+                  amountCop: 0,
+                  month,
+                  year,
+                  date: new Date().toISOString().split('T')[0]
+                };
+                updateData({ investments: [...data.investments, record] });
+              }}
+              className="text-indigo-600 text-sm font-semibold hover:text-indigo-800 hover:underline transition-colors"
+            >
+              + Nuevo ETF
+            </button>
+            <button 
+              onClick={exportToCSV}
+              className="text-slate-500 text-sm font-medium hover:text-indigo-600 transition-colors"
+            >
+              📥 Exportar Inversiones
+            </button>
+            <div className="bg-emerald-50 text-emerald-700 px-4 py-1.5 rounded-full text-sm font-bold shadow-sm">
+              Total Invertido: ${totalInvestedMonth.toLocaleString()} COP
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -156,11 +129,42 @@ const InvestmentManager: React.FC<Props> = ({ data, updateData, month, year }) =
             <tbody className="divide-y divide-slate-50">
               {currentInvestments.map(i => (
                 <tr key={i.id} className="text-sm hover:bg-slate-50/50 transition-colors">
-                  <td className="py-4 px-2 font-bold text-indigo-900">{i.etfName}</td>
-                  <td className="py-4 px-2 text-slate-500">{i.date}</td>
-                  <td className="py-4 px-2 font-medium text-slate-700">${i.amountUsd.toLocaleString()} USD</td>
-                  <td className="py-4 px-2 text-slate-400 font-mono text-xs">{i.exchangeRate.toLocaleString()}</td>
-                  <td className="py-4 px-2 font-bold text-emerald-600">${i.amountCop.toLocaleString()}</td>
+                  <td className="py-4 px-2 font-bold text-indigo-900">
+                    <input
+                      list={`etf-names-${month}-${year}`}
+                      className="p-1 text-sm rounded-md border border-slate-200 w-28"
+                      value={i.etfName}
+                      onChange={(ev) => handleUpdate(i.id, { etfName: ev.target.value.toUpperCase() })}
+                    />
+                    <datalist id={`etf-names-${month}-${year}`}>
+                      {ETF_NAMES.map(n => <option key={n} value={n} />)}
+                    </datalist>
+                  </td>
+                  <td className="py-4 px-2 text-slate-500">
+                    <input
+                      type="date"
+                      className="p-1 text-sm rounded-md border border-slate-200"
+                      value={i.date}
+                      onChange={(ev) => handleUpdate(i.id, { date: ev.target.value })}
+                    />
+                  </td>
+                  <td className="py-4 px-2 font-medium text-slate-700">
+                    <input
+                      type="number"
+                      className="p-1 text-sm rounded-md border border-slate-200 w-24"
+                      value={Number(i.amountUsd)}
+                      onChange={(ev) => handleUpdate(i.id, { amountUsd: Number(ev.target.value) })}
+                    /> USD
+                  </td>
+                  <td className="py-4 px-2 text-slate-400 font-mono text-xs">
+                    <input
+                      type="number"
+                      className="p-1 text-sm rounded-md border border-slate-200 w-28"
+                      value={Number(i.exchangeRate)}
+                      onChange={(ev) => handleUpdate(i.id, { exchangeRate: Number(ev.target.value) })}
+                    />
+                  </td>
+                  <td className="py-4 px-2 font-bold text-emerald-600">${Number(i.amountCop).toLocaleString()}</td>
                   <td className="py-4 px-2">
                     <button onClick={() => updateData({ investments: data.investments.filter(x => x.id !== i.id)})} className="text-red-400 hover:text-red-600 font-medium">Eliminar</button>
                   </td>

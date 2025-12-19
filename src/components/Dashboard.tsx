@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { AppData } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LineChart, Line } from 'recharts';
 import { MONTHS } from '../constants';
@@ -42,23 +42,53 @@ const Dashboard: React.FC<DashboardProps> = ({ data, month, year }) => {
     ];
   }, [totalIndividual, totalShared]);
 
+  const [monthsRange, setMonthsRange] = useState<number>(6);
+
   const historyData = useMemo(() => {
-    const months = Array.from({ length: 6 }, (_, i) => {
-      const d = new Date(year, month - 5 + i, 1);
+    const months = Array.from({ length: monthsRange }, (_, i) => {
+      const d = new Date(year, month - (monthsRange - 1) + i, 1);
       const m = d.getMonth();
       const y = d.getFullYear();
-      
+
       const monthlyNetWorth = data.balances
         .filter(b => b.month === m && b.year === y)
         .reduce((sum, b) => sum + b.balance, 0);
-        
+
       return {
         name: MONTHS[m],
         patrimonio: monthlyNetWorth
       };
     });
     return months;
-  }, [data.balances, month, year]);
+  }, [data.balances, month, year, monthsRange]);
+
+  const comparativeData = useMemo(() => {
+    const months = Array.from({ length: monthsRange }, (_, i) => {
+      const d = new Date(year, month - (monthsRange - 1) + i, 1);
+      const m = d.getMonth();
+      const y = d.getFullYear();
+
+      const monthlyNetWorth = data.balances
+        .filter(b => b.month === m && b.year === y)
+        .reduce((sum, b) => sum + b.balance, 0);
+
+      const monthlyExpenses = data.expenses
+        .filter(e => e.month === m && e.year === y)
+        .reduce((sum, e) => sum + e.amount, 0);
+
+      const monthlyInvestments = data.investments
+        .filter(inv => inv.month === m && inv.year === y)
+        .reduce((sum, inv) => sum + inv.amountCop, 0);
+
+      return {
+        name: MONTHS[m],
+        patrimonio: monthlyNetWorth,
+        gastos: monthlyExpenses,
+        inversiones: monthlyInvestments
+      };
+    });
+    return months;
+  }, [data.balances, data.expenses, data.investments, month, year, monthsRange]);
 
   const etfDist = useMemo(() => {
     const etfMap = new Map<string, number>();
@@ -94,6 +124,18 @@ const Dashboard: React.FC<DashboardProps> = ({ data, month, year }) => {
           </p>
           <div className="mt-2 text-xs text-slate-400">En activos financieros</div>
         </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-3">
+        <label className="text-sm text-slate-500">Rango meses:</label>
+        <select
+          value={monthsRange}
+          onChange={(e) => setMonthsRange(Number(e.target.value))}
+          className="p-1 text-sm rounded-md border border-slate-200"
+        >
+          <option value={6}>6 meses</option>
+          <option value={12}>12 meses</option>
+        </select>
       </div>
 
       {/* Charts Row 1 */}
@@ -133,6 +175,23 @@ const Dashboard: React.FC<DashboardProps> = ({ data, month, year }) => {
             </LineChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      {/* Comparative Chart: Gastos vs Patrimonio vs Inversiones */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-[380px]">
+        <h3 className="text-lg font-bold mb-4 text-slate-800">Comparativo Mensual: Gastos · Patrimonio · Inversiones</h3>
+        <ResponsiveContainer width="100%" height="85%">
+          <LineChart data={comparativeData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+            <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
+            <Tooltip formatter={(value: number) => `$${value.toLocaleString()} COP`} />
+            <Legend verticalAlign="top" height={36} />
+            <Line type="monotone" dataKey="gastos" name="Gastos" stroke="#ef4444" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="patrimonio" name="Patrimonio" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
+            <Line type="monotone" dataKey="inversiones" name="Inversiones" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
 
       {/* Charts Row 2 */}

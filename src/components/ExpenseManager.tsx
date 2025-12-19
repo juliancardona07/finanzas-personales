@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppData, Expense, ExpenseCategory, ExpenseType } from '../types';
 import { EXPENSE_NAMES, SHARED_EXPENSE_NAMES } from '../constants';
 
@@ -12,7 +12,30 @@ interface Props {
 
 const ExpenseManager: React.FC<Props> = ({ data, updateData, month, year }) => {
   const currentExpenses = data.expenses.filter(e => e.month === month && e.year === year);
-  
+
+  // Ensure default expense list exists for the selected month/year
+  useEffect(() => {
+    const existingNames = new Set(
+      data.expenses.filter(e => e.month === month && e.year === year).map(e => e.name)
+    );
+
+    const missingNames = EXPENSE_NAMES.filter(n => !existingNames.has(n));
+    if (missingNames.length === 0) return;
+
+    const defaults = missingNames.map(name => ({
+      id: crypto.randomUUID(),
+      name,
+      amount: 0,
+      type: 'Fijo' as ExpenseType,
+      category: SHARED_EXPENSE_NAMES.includes(name) ? 'Compartido' : 'Individual',
+      month,
+      year
+    }));
+
+    updateData({ expenses: [...data.expenses, ...defaults] });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [month, year]);
+
   const [newExpense, setNewExpense] = useState<{
     name: string;
     amount: string;
@@ -62,6 +85,11 @@ const ExpenseManager: React.FC<Props> = ({ data, updateData, month, year }) => {
     updateData({ expenses: data.expenses.filter(e => e.id !== id) });
   };
 
+  const handleUpdate = (id: string, changes: Partial<Expense>) => {
+    const updated = data.expenses.map(e => e.id === id ? { ...e, ...changes } : e);
+    updateData({ expenses: updated });
+  };
+
   const exportToCSV = () => {
     const headers = ['Nombre', 'Tipo', 'Categoria', 'Valor Total', 'Mes', 'Año'];
     const rows = data.expenses.map(e => [
@@ -89,72 +117,40 @@ const ExpenseManager: React.FC<Props> = ({ data, updateData, month, year }) => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-bold text-slate-800">Agregar Gasto</h3>
-          <button 
-            onClick={exportToCSV}
-            className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-indigo-600 transition-colors"
-          >
-            📥 Exportar Todo
-          </button>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <select 
-            className={inputClasses}
-            value={newExpense.name}
-            onChange={(e) => {
-              const name = e.target.value;
-              setNewExpense({
-                ...newExpense, 
-                name,
-                category: SHARED_EXPENSE_NAMES.includes(name) ? 'Compartido' : 'Individual'
-              });
-            }}
-          >
-            {EXPENSE_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
-          <input 
-            type="number" 
-            placeholder="Valor COP"
-            className={inputClasses}
-            value={newExpense.amount}
-            onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
-          />
-          <select 
-            className={inputClasses}
-            value={newExpense.type}
-            onChange={(e) => setNewExpense({...newExpense, type: e.target.value as ExpenseType})}
-          >
-            <option value="Fijo">Fijo</option>
-            <option value="Variable">Variable</option>
-          </select>
-          <select 
-            className={inputClasses}
-            value={newExpense.category}
-            onChange={(e) => setNewExpense({...newExpense, category: e.target.value as ExpenseCategory})}
-          >
-            <option value="Individual">Individual</option>
-            <option value="Compartido">Compartido</option>
-          </select>
-          <button 
-            onClick={handleAdd}
-            className="bg-indigo-600 text-white p-2.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-all shadow-md active:scale-95"
-          >
-            Agregar Gasto
-          </button>
-        </div>
-      </div>
-
       <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-lg font-bold text-slate-800">Listado de Gastos</h3>
-          <button 
-            onClick={handleClone}
-            className="text-indigo-600 text-sm font-semibold hover:text-indigo-800 hover:underline transition-colors"
-          >
-            + Clonar fijos del mes anterior
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                const newExpenseRecord: Expense = {
+                  id: crypto.randomUUID(),
+                  name: '',
+                  amount: 0,
+                  type: 'Fijo',
+                  category: 'Individual',
+                  month,
+                  year
+                };
+                updateData({ expenses: [...data.expenses, newExpenseRecord] });
+              }}
+              className="text-indigo-600 text-sm font-semibold hover:text-indigo-800 hover:underline transition-colors"
+            >
+              + Nuevo registro
+            </button>
+            <button 
+              onClick={handleClone}
+              className="text-indigo-600 text-sm font-semibold hover:text-indigo-800 hover:underline transition-colors"
+            >
+              + Clonar fijos del mes anterior
+            </button>
+            <button 
+              onClick={exportToCSV}
+              className="text-slate-500 text-sm font-medium hover:text-indigo-600 transition-colors"
+            >
+              📥 Exportar Todo
+            </button>
+          </div>
         </div>
         <table className="w-full text-left">
           <thead>
@@ -170,16 +166,52 @@ const ExpenseManager: React.FC<Props> = ({ data, updateData, month, year }) => {
           <tbody className="divide-y divide-slate-50">
             {currentExpenses.map(e => (
               <tr key={e.id} className="text-sm hover:bg-slate-50/50 transition-colors">
-                <td className="py-3 px-2 font-medium text-slate-800">{e.name}</td>
-                <td className="py-3 px-2">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${e.type === 'Fijo' ? 'bg-indigo-50 text-indigo-600' : 'bg-orange-50 text-orange-600'}`}>
-                    {e.type}
-                  </span>
+                <td className="py-3 px-2 font-medium text-slate-800">
+                  <input
+                    list={`expense-names-${month}-${year}`}
+                    placeholder="Nombre del gasto"
+                    className="p-1 text-sm rounded-md border border-slate-200 w-40"
+                    value={e.name}
+                    onChange={(ev) => {
+                      const val = ev.target.value;
+                      const cat = SHARED_EXPENSE_NAMES.includes(val) ? 'Compartido' : 'Individual';
+                      handleUpdate(e.id, { name: val, category: cat });
+                    }}
+                  />
+                  <datalist id={`expense-names-${month}-${year}`}>
+                    {EXPENSE_NAMES.map(n => <option key={n} value={n} />)}
+                  </datalist>
                 </td>
-                <td className="py-3 px-2 text-slate-500">{e.category}</td>
-                <td className="py-3 px-2 font-semibold text-slate-700">${e.amount.toLocaleString()}</td>
+                <td className="py-3 px-2">
+                  <select
+                    value={e.type}
+                    onChange={(ev) => handleUpdate(e.id, { type: ev.target.value as ExpenseType })}
+                    className="p-1 text-sm rounded-md border border-slate-200"
+                  >
+                    <option value="Fijo">Fijo</option>
+                    <option value="Variable">Variable</option>
+                  </select>
+                </td>
+                <td className="py-3 px-2 text-slate-500">
+                  <select
+                    value={e.category}
+                    onChange={(ev) => handleUpdate(e.id, { category: ev.target.value as ExpenseCategory })}
+                    className="p-1 text-sm rounded-md border border-slate-200"
+                  >
+                    <option value="Individual">Individual</option>
+                    <option value="Compartido">Compartido</option>
+                  </select>
+                </td>
+                <td className="py-3 px-2 font-semibold text-slate-700">
+                  <input
+                    type="number"
+                    className="w-28 p-1 text-sm rounded-md border border-slate-200"
+                    value={Number(e.amount)}
+                    onChange={(ev) => handleUpdate(e.id, { amount: Number(ev.target.value) })}
+                  />
+                </td>
                 <td className="py-3 px-2 text-indigo-600 font-bold">
-                  ${(e.category === 'Compartido' ? e.amount / 2 : e.amount).toLocaleString()}
+                  ${(e.category === 'Compartido' ? (e.amount / 2) : e.amount).toLocaleString()}
                 </td>
                 <td className="py-3 px-2">
                   <button onClick={() => handleDelete(e.id)} className="text-red-400 hover:text-red-600 font-medium transition-colors">Eliminar</button>
